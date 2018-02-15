@@ -17,6 +17,12 @@ def main(args):
     trainpath = args.train_csv
     validationpath = args.validation_csv
     learning_rate = args.lr
+    default_values = [[0.0] for _ in range(785)]
+    
+    def decode(line):
+        item = tf.decode_csv(line, default_values)
+        return item[0], item[1:]
+    
     
     # Skip the header and filter any comments.
     training_dataset = tf.data.TextLineDataset(trainpath).skip(1).filter(lambda line: tf.not_equal(tf.substr(line, 0, 1), "#"))
@@ -24,10 +30,11 @@ def main(args):
     
     # The dataset api reads the csv as text.
     # Using the below function we can split the text into labels and pixels.
-    training_dataset = training_dataset.map(
-        lambda x: tf.py_func(splitter, [x], [tf.float32, tf.float32]))
-    validation_dataset = validation_dataset.map(
-        lambda x: tf.py_func(splitter, [x], [tf.float32, tf.float32]))
+    
+    training_dataset = (training_dataset.cache().map(decode))
+    #training_dataset = training_dataset.map(
+    #    lambda x: tf.py_func(splitter, [x], [tf.float32, tf.float32]))
+    validation_dataset = validation_dataset.cache().map(decode)
     
     # Normalize the dataset to 0-1 range
     training_dataset = training_dataset.map(
@@ -58,68 +65,61 @@ def main(args):
     validation_iterator = validation_dataset.make_initializable_iterator()
     
     # Define training op here
-    train_graph = tf.Graph()
-    tf.reset_default_graph()
+    #train_graph = tf.Graph()
+    #tf.reset_default_graph()
     
-    with train_graph.as_default():
-        x = tf.placeholder('float32',shape=[bs,None])
-        y = tf.placeholder('int32',shape=[bs])
-        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        logits = graph(x) # training mode
-        _y = tf.one_hot(y, depth=10)
-        acc = create_accuracy(logits, _y)
-        loss = create_loss(logits, _y)
-        train_op, global_step = create_optimizer(logits, learning_rate=learning_rate)
-        training_acc = []
-        training_loss = []
+    x = tf.placeholder('float32',shape=[bs,None])
+    y = tf.placeholder('int32',shape=[bs])
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    logits = graph(x) # training mode
+    _y = tf.cast(tf.one_hot(y, depth=10), tf.int32)
+    loss = create_loss(logits, _y)
+    train_op, global_step = create_optimizer(logits, learning_rate=learning_rate)
+    training_loss = []
+    epoch_loss = []
+    
+    with tf.Session() as sess:
+        sess.run(tf.group(tf.global_variables_initializer(), 
+                          tf.local_variables_initializer()))
+        # The `Iterator.string_handle()` method returns a tensor that can be evaluated
+        # and used to feed the `handle` placeholder.
+        training_handle = sess.run(training_iterator.string_handle())
+        validation_handle = sess.run(validation_iterator.string_handle())
         
-        with tf.Session() as sess:
-            sess.run(tf.group(tf.global_variables_initializer(),
-                             tf.local_variables_initializer()))
-            
-            # The `Iterator.string_handle()` method returns a tensor that can be evaluated
-            # and used to feed the `handle` placeholder.
-            training_handle = sess.run(training_iterator.string_handle())
-            validation_handle = sess.run(validation_iterator.string_handle())
-            
-            for i in range(args.nrof_epochs):
-                sess.run(training_iterator.initializer)
-                while True:
-                    try:
-                        label_batch, image_batch = sess.run(next_element, feed_dict={handle: training_handle})
-                        _, _loss, _acc = sess.run([train_op, loss, acc], feed_dict = {x:image_batch, y:_y})
-                        training_loss.append(_loss)
-                        training_acc.append(_acc)
-                        gs = tf.train.global_step()
-                        if gs%10==0:
-                            print_results(gs, training_loss, training_acc)
-                            training_loss = []
-                            training_acc = []
-                    except tf.errors.OutOfRangeError:
-                        print('Out of Data, Training Finished!')
-                    finally:
-                        sess.run(validation_iterator.initializer)
-                        sess.run(next_element, feed_dict={handle: validation_handle})
-                if i%2==0:
-                    print('Epoch: ',i, end=' ')
-                    print_results(i, training_loss, training_acc)
-                    training_loss = []
-                    training_acc = []
-                    #sess.run(validation_iterator.initializer)
-                    #sess.run(next_element, feed_dict={handle: validation_handle})
+        for i in range(args.nrof_epochs):
+            sess.run(training_iterator.initializer)
+            while True:
+                try:
+                    label_batch, image_batch = sess.run(next_element, feed_dict={handle: training_handle})
+                    _, _loss, g = sess.run([train_op, loss, global_step], feed_dict = {x:image_batch, y:label_batch})
+                    training_loss.append(_loss)
+                    epoch_loss.append(_loss)
+                    if tf.train.global_step(sess, global_step)%10==0:
+                        print_results(g, training_loss)
+                except tf.errors.OutOfRangeError:
+                    print('Out of Data, Training Finished!')
+                    break
+                #finally:
+                #    sess.run(validation_iterator.initializer)
+                #    sess.run(next_element, feed_dict={handle: validation_handle})
+            print('Epoch: ',i, end=' ')
+            print_results(i, epoch_loss)
+            epoch_loss = []
+                #sess.run(validation_iterator.initializer)
+                #sess.run(next_element, feed_dict={handle: validation_handle})
     return True
     
 
-def print_results(iteration, losses, accuracies):
-    print("iteration: {0:5d} loss: {1:0.3f}, accuracy: {2:0.3f}"
-          .format(iteration, np.mean(losses), np.mean(accuracies)))
+def print_results(iteration, losses):
+    print("iteration: {0:5d} loss: {1:0.3f}"
+          .format(iteration, np.mean(losses)))
 
 
 def create_accuracy(logits, outputs):
-    preds = tf.argmax(logits, axis=-1, output_type=tf.int32)
-    preds = tf.cast(preds, tf.float32)
-    correct_preds = tf.cast(tf.equal(preds, outputs), tf.float32)
-    accuracy = tf.reduce_mean(correct_preds)
+    correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(outputs, 1))
+    print(correct_prediction)
+    correct_prediction = tf.cast(correct_prediction, tf.float32)
+    accuracy = tf.reduce_mean(correct_prediction)
     return accuracy
     
 
