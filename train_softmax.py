@@ -12,6 +12,15 @@ from utils import splitter, normalize
 from model import graph
 
 
+
+
+# TO DO
+# Add saver
+# Add summary
+# Add validation after every epoch
+# Add Validation accuracy
+
+
 def main(args):
     bs = args.batch_size
     trainpath = args.train_csv
@@ -36,6 +45,8 @@ def main(args):
     #    lambda x: tf.py_func(splitter, [x], [tf.float32, tf.float32]))
     validation_dataset = validation_dataset.cache().map(decode)
     
+
+
     # Normalize the dataset to 0-1 range
     training_dataset = training_dataset.map(
         lambda label, pixel: tf.py_func(normalize, [label, pixel], [tf.float32, tf.float32]))
@@ -70,11 +81,18 @@ def main(args):
     
     x = tf.placeholder('float32',shape=[bs,None])
     y = tf.placeholder('int32',shape=[bs])
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     logits = graph(x) # training mode
-    _y = tf.cast(tf.one_hot(y, depth=10), tf.int32)
-    loss = create_loss(logits, _y)
-    train_op, global_step = create_optimizer(logits, learning_rate=learning_rate)
+    _y = tf.one_hot(indices=tf.cast(y, tf.int32), depth=10)
+    #loss = create_loss(logits, _y)
+    loss = tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=logits)
+    loss = tf.reduce_mean(loss,axis=0)
+
+    global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="global_step")    
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+    train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
+
+    #train_op, global_step = create_optimizer(logits, learning_rate=learning_rate)
     training_loss = []
     epoch_loss = []
     
@@ -91,19 +109,22 @@ def main(args):
             while True:
                 try:
                     label_batch, image_batch = sess.run(next_element, feed_dict={handle: training_handle})
-                    _, _loss, g = sess.run([train_op, loss, global_step], feed_dict = {x:image_batch, y:label_batch})
+                    #np.save('x.npy',image_batch)
+                    #print(label_batch)
+                    # xx = sess.run([_y], feed_dict = {y:label_batch})
+                    _loss,_, g = sess.run([loss,train_op,global_step], feed_dict = {x:image_batch, y:label_batch})
                     training_loss.append(_loss)
                     epoch_loss.append(_loss)
-                    if tf.train.global_step(sess, global_step)%10==0:
+                    if tf.train.global_step(sess, global_step)%100==0:
                         print_results(g, training_loss)
+                        training_loss = []
                 except tf.errors.OutOfRangeError:
                     print('Out of Data, Training Finished!')
                     break
                 #finally:
                 #    sess.run(validation_iterator.initializer)
                 #    sess.run(next_element, feed_dict={handle: validation_handle})
-            print('Epoch: ',i, end=' ')
-            print_results(i, epoch_loss)
+            print_results_epoch(i, epoch_loss)
             epoch_loss = []
                 #sess.run(validation_iterator.initializer)
                 #sess.run(next_element, feed_dict={handle: validation_handle})
@@ -111,29 +132,33 @@ def main(args):
     
 
 def print_results(iteration, losses):
-    print("iteration: {0:5d} loss: {1:0.3f}"
+    print("Batch: {0:5d} loss: {1:0.3f}"
           .format(iteration, np.mean(losses)))
+
+
+def print_results_epoch(iteration, losses):
+    print("Epoch: {0:5d} loss: {1:0.3f}"
+          .format(iteration+1, np.mean(losses)))
 
 
 def create_accuracy(logits, outputs):
     correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(outputs, 1))
-    print(correct_prediction)
     correct_prediction = tf.cast(correct_prediction, tf.float32)
     accuracy = tf.reduce_mean(correct_prediction)
     return accuracy
     
 
 def create_loss(logits, y):
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y))
+    loss = tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=logits)
+    loss = tf.reduce_mean(loss,axis=0)
+    # loss = tf.losses.softmax_cross_entropy(onehot_labels=y, logits=logits)
     return loss
 
 
 def create_optimizer(loss, learning_rate):
     global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="global_step")    
     optimizer = tf.train.AdamOptimizer(learning_rate)
-    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    with tf.control_dependencies(update_ops):
-        train_op = optimizer.minimize(loss, global_step)
+    train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
     return train_op, global_step
 
     

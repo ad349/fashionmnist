@@ -8,5 +8,7 @@ def splitter(x):
 
 
 def normalize(label, pixel):
-    """Returns a normalized feature array between -1 and 1"""
+    """Returns a normalized feature array between 0 and 1"""
+    pixel = pixel.astype(np.float32)
+    #return label, pixel/np.max(pixel)
     return label, (pixel - np.min(pixel))/(np.max(pixel) - np.min(pixel))
