@@ -4,6 +4,7 @@ def graph(x, training_mode=True):
     
     with tf.name_scope('Reshape'):
         x = tf.reshape(x, [-1, 28, 28, 1])
+        tf.summary.image('input', x, 10)
     
     print('INPUT SHAPE: ', x.get_shape())
     
@@ -77,6 +78,8 @@ def graph(x, training_mode=True):
             
     print('SOFTMAX INPUT SHAPE: ', x.get_shape())
     
+    tf.summary.histogram('activations', x)
+
     with tf.name_scope('Softmax'):
         with tf.variable_scope('softmax_A'):
             x = tf.contrib.layers.fully_connected(x, num_outputs=10,activation_fn=None)
