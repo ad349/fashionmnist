@@ -165,7 +165,7 @@ def main(args):
 						train_acc = []
 				except tf.errors.OutOfRangeError:
 					print('='*30)
-					print('Epoch {} Finished !'.format(i))
+					print('Epoch {} Finished !'.format(i+1))
 					print_results_epoch(i, epoch_loss, epoch_acc)
 					print('='*30)
 					print()
