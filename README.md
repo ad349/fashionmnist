@@ -11,9 +11,10 @@ python train_softmax_clean.py \
 --nrof_epochs 5
 
 # To Do
-* Add Summaries and Plots
-* Exponential Learning Rate Decay, Stepwise
-* Export Model
-* Add validation loss and accuracy
-* Calculate relative improvement and stop training if validation accuracy starts decreasing
-* Add image summary of activation maps
+- [x] Add Summaries and Plots
+- [x] Save checkpoint
+- [ ] Exponential Learning Rate Decay, Stepwise
+- [ ] Export Model pb
+- [ ] Add validation loss and accuracy
+- [ ] Calculate relative improvement and stop training if validation accuracy starts decreasing
+- [ ] Add image summary of activation maps
