@@ -72,6 +72,10 @@ def print_results_epoch(iteration, losses, accuracy):
     print("Epoch: {0:5d} loss: {1:0.3f} accuracy {2:0.3f}"
           .format(iteration+1, np.mean(losses), np.mean(accuracy)))
 
+def print_results_val(losses, accuracy):
+    print("Validation loss: {0:0.3f} accuracy {1:0.3f}"
+          .format(np.mean(losses), np.mean(accuracy)))
+
 # def print_accuracy(iteration, acc):
 # 	print("Batch: {0:5d} Accuracy: {1:0.3f}"
 #           .format(iteration, np.mean(acc)))
@@ -126,6 +130,8 @@ def main(args):
 	epoch_loss = []
 	train_acc = []
 	epoch_acc = []
+	val_loss = []
+	val_acc = []
 
 	saver = tf.train.Saver()
 
@@ -164,10 +170,25 @@ def main(args):
 						training_loss = []
 						train_acc = []
 				except tf.errors.OutOfRangeError:
-					print('='*30)
+					print('='*60)
 					print('Epoch {} Finished !'.format(i+1))
 					print_results_epoch(i, epoch_loss, epoch_acc)
-					print('='*30)
+					print('='*60)
+					print()
+					print('Running forward pass on validation set..')
+					sess.run(validation_iterator.initializer)
+					
+					while True:
+						try:
+							val_label_batch, val_image_batch = sess.run(next_element, feed_dict={handle: validation_handle})
+							_val_loss, _val_acc = sess.run([loss, acc], feed_dict = {x:val_image_batch, y:val_label_batch})
+							val_loss.append(_val_loss)
+							val_acc.append(_val_acc)
+						except tf.errors.OutOfRangeError:
+							break
+					print('='*60)
+					print_results_val(val_loss, val_acc)
+					print('='*60)
 					print()
 					break
 			# print_results_epoch(i, epoch_loss, epoch_acc)
@@ -177,7 +198,6 @@ def main(args):
 				saver.save(sess, os.path.join(savepath,"model.ckpt"))
 				print("Model saved in %s" % (savepath))
 				print()
-
 	return
 
 if __name__ == '__main__':

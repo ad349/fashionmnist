@@ -13,8 +13,8 @@ python train_softmax_clean.py \
 # To Do
 - [x] Add Summaries and Plots
 - [x] Save checkpoint
+- [x] Add validation loss and accuracy
 - [ ] Exponential Learning Rate Decay, Stepwise
 - [ ] Export Model pb
-- [ ] Add validation loss and accuracy
 - [ ] Calculate relative improvement and stop training if validation accuracy starts decreasing
 - [ ] Add image summary of activation maps
