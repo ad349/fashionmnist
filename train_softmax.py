@@ -5,14 +5,12 @@ from __future__ import division
 from __future__ import print_function
 
 import sys
+import os
 import numpy as np
 import tensorflow as tf
 import argparse
 from utils import splitter, normalize
 from model import graph
-
-
-
 
 # TO DO
 # Add saver
@@ -26,6 +24,11 @@ def main(args):
     trainpath = args.train_csv
     validationpath = args.validation_csv
     learning_rate = args.lr
+    logdir = args.log_dir
+
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
+
     default_values = [[0.0] for _ in range(785)]
     
     def decode(line):
@@ -83,10 +86,12 @@ def main(args):
     y = tf.placeholder('int32',shape=[bs])
     #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     logits = graph(x) # training mode
+
     _y = tf.one_hot(indices=tf.cast(y, tf.int32), depth=10)
     #loss = create_loss(logits, _y)
     loss = tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=logits)
     loss = tf.reduce_mean(loss,axis=0)
+    tf.summary.scalar('loss', loss)
 
     global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="global_step")    
     optimizer = tf.train.AdamOptimizer(learning_rate)
@@ -97,8 +102,13 @@ def main(args):
     epoch_loss = []
     
     with tf.Session() as sess:
+        
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(logdir, sess.graph)
+
         sess.run(tf.group(tf.global_variables_initializer(), 
                           tf.local_variables_initializer()))
+
         # The `Iterator.string_handle()` method returns a tensor that can be evaluated
         # and used to feed the `handle` placeholder.
         training_handle = sess.run(training_iterator.string_handle())
@@ -112,10 +122,12 @@ def main(args):
                     #np.save('x.npy',image_batch)
                     #print(label_batch)
                     # xx = sess.run([_y], feed_dict = {y:label_batch})
-                    _loss,_, g = sess.run([loss,train_op,global_step], feed_dict = {x:image_batch, y:label_batch})
+                    summary, _loss,_, g = sess.run([merged, loss,train_op,global_step], feed_dict = {x:image_batch, y:label_batch})
+
                     training_loss.append(_loss)
                     epoch_loss.append(_loss)
-                    if tf.train.global_step(sess, global_step)%100==0:
+                    if tf.train.global_step(sess, global_step)%10==0:
+                        train_writer.add_summary(summary)
                         print_results(g, training_loss)
                         training_loss = []
                 except tf.errors.OutOfRangeError:
@@ -128,8 +140,22 @@ def main(args):
             epoch_loss = []
                 #sess.run(validation_iterator.initializer)
                 #sess.run(next_element, feed_dict={handle: validation_handle})
+        train_writer.close()
     return True
     
+
+def variable_summaries(var):
+    """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
+    with tf.name_scope('summaries'):
+        mean = tf.reduce_mean(var)
+        tf.summary.scalar('mean', mean)
+        with tf.name_scope('stddev'):
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+        tf.summary.scalar('stddev', stddev)
+        tf.summary.scalar('max', tf.reduce_max(var))
+        tf.summary.scalar('min', tf.reduce_min(var))
+        tf.summary.histogram('histogram', var)
+
 
 def print_results(iteration, losses):
     print("Batch: {0:5d} loss: {1:0.3f}"
@@ -146,22 +172,8 @@ def create_accuracy(logits, outputs):
     correct_prediction = tf.cast(correct_prediction, tf.float32)
     accuracy = tf.reduce_mean(correct_prediction)
     return accuracy
-    
-
-def create_loss(logits, y):
-    loss = tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=logits)
-    loss = tf.reduce_mean(loss,axis=0)
-    # loss = tf.losses.softmax_cross_entropy(onehot_labels=y, logits=logits)
-    return loss
 
 
-def create_optimizer(loss, learning_rate):
-    global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="global_step")    
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
-    return train_op, global_step
-
-    
 def parser(argv):
     parser = argparse.ArgumentParser(description='Trains a Deep Neural Network on Fashion MNIST Data')
     parser.add_argument('--train_csv', default='training.csv', type=str, required=True, help='Path to the training csv.')
@@ -170,6 +182,7 @@ def parser(argv):
     parser.add_argument('--buffer_size', default=10000, type=int, help='Buffer Size for random selection of images.')
     parser.add_argument('--lr', default=0.01, type=float, help='Learning Rate.')
     parser.add_argument('--nrof_epochs', default=20, type=int, help='Number of Epochs for training.')
+    parser.add_argument('--log_dir', default='./log', type=str, help='Location of log.')
     args = parser.parse_args()
     return args
 

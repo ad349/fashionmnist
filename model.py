@@ -4,7 +4,7 @@ def graph(x, training_mode=True):
     
     with tf.name_scope('Reshape'):
         x = tf.reshape(x, [-1, 28, 28, 1])
-        tf.summary.image('input', x, 10)
+        tf.summary.image('image/input', x, 10)
     
     print('INPUT SHAPE: ', x.get_shape())
     
@@ -20,7 +20,7 @@ def graph(x, training_mode=True):
                                 name='conv2d_A')
 
     print('CONV_A SHAPE: ', x.get_shape())
-    
+  
     with tf.name_scope('Batch_Normalization'):
         with tf.variable_scope('batch_norm_A'):
             x = tf.nn.relu(tf.layers.batch_normalization(x, training=training_mode))
@@ -70,7 +70,7 @@ def graph(x, training_mode=True):
             # x = tf.layers.dense(x, units=512, activation=tf.nn.relu)
             # x = tf.layers.dropout(x, rate=0.4, training=True)
 
-    print('FC2 INPUT SHAPE: ', x.get_shape())
+    # print('FC2 INPUT SHAPE: ', x.get_shape())
     
     # with tf.name_scope('Fc12'):
     #     with tf.variable_scope('fully_connc_B'):

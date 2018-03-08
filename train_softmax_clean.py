@@ -15,11 +15,7 @@ from model import graph
 def input_pipeline(trainpath, validationpath, buffer_size, batch_size):
 
 	# Skip the header and filter any comments.
-	if not os.path.exists(trainpath):
-		raise IOError('Training file does not exist')
-
-	if not buffer_size or not batch_size:
-		raise ValueError('Please provide valid value for buffer_size and batch_size')
+	
 
 	training_dataset = tf.data.TextLineDataset(trainpath).skip(1).filter(lambda line: tf.not_equal(tf.substr(line, 0, 1), "#"))
 	validation_dataset = tf.data.TextLineDataset(validationpath).skip(1).filter(lambda line: tf.not_equal(tf.substr(line, 0, 1), "#"))
@@ -68,21 +64,21 @@ def train(batch_size, learning_rate, x, y):
 	train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
 	return loss, acc, train_op, global_step
 
-def print_results(iteration, losses):
-    print("Batch: {0:5d} loss: {1:0.3f}"
-          .format(iteration, np.mean(losses)))
+def print_results(iteration, losses, accuracy):
+    print("Batch: {0:5d} loss: {1:0.3f} accuracy: {2:0.3f}"
+          .format(iteration, np.mean(losses), np.mean(accuracy)))
 
-def print_results_epoch(iteration, losses):
-    print("Epoch: {0:5d} loss: {1:0.3f}"
-          .format(iteration+1, np.mean(losses)))
+def print_results_epoch(iteration, losses, accuracy):
+    print("Epoch: {0:5d} loss: {1:0.3f} accuracy {2:0.3f}"
+          .format(iteration+1, np.mean(losses), np.mean(accuracy)))
 
-def print_accuracy(iteration, acc):
-	print("Batch: {0:5d} Accuracy: {1:0.3f}"
-          .format(iteration, np.mean(acc)))
+# def print_accuracy(iteration, acc):
+# 	print("Batch: {0:5d} Accuracy: {1:0.3f}"
+#           .format(iteration, np.mean(acc)))
 
-def print_accuracy_epoch(iteration, acc):
-    print("Epoch: {0:5d} Accuracy: {1:0.3f}"
-          .format(iteration+1, np.mean(acc)))
+# def print_accuracy_epoch(iteration, acc):
+#     print("Epoch: {0:5d} Accuracy: {1:0.3f}"
+#           .format(iteration+1, np.mean(acc)))
 
 def parser(argv):
 	parser = argparse.ArgumentParser(description='Trains a Deep Neural Network on Fashion MNIST Data')
@@ -93,6 +89,7 @@ def parser(argv):
 	parser.add_argument('--lr', default=0.01, type=float, help='Learning Rate.')
 	parser.add_argument('--nrof_epochs', default=20, type=int, help='Number of Epochs for training.')
 	parser.add_argument('--log_dir', default='./log', type=str, help='Location of log.')
+	parser.add_argument('--model_dir', default='./model', type=str, help='Location of saved model.')
 	args = parser.parse_args()
 	return args
 
@@ -104,6 +101,16 @@ def main(args):
 	learning_rate = args.lr
 	nepochs = args.nrof_epochs
 	logdir = args.log_dir
+	savepath = args.model_dir
+
+	if not os.path.exists(trainpath):
+		raise IOError('Training file does not exist')
+
+	if not buffer_size or not batch_size:
+		raise ValueError('Please provide valid value for buffer_size and batch_size')
+
+	if not os.path.exists(savepath):
+		os.makedirs(savepath)
 
 	x = tf.placeholder('float32',shape=[batch_size,None])
 	y = tf.placeholder('int32',shape=[batch_size])
@@ -120,9 +127,18 @@ def main(args):
 	train_acc = []
 	epoch_acc = []
 
+	saver = tf.train.Saver()
+
 	with tf.Session() as sess:
 		sess.run(tf.group(tf.global_variables_initializer(), 
 	                      tf.local_variables_initializer()))
+
+		if os.path.exists(os.path.join(savepath,"checkpoint")):
+			print("="*30)
+			print("Restoring existing model..")
+			print("="*30)
+			print()
+			saver.restore(sess, os.path.join(savepath, "model.ckpt"))
 
 		train_writer = tf.summary.FileWriter(logdir, graph=tf.get_default_graph())
 		# train_writer.add_graph(tf.get_default_graph())
@@ -144,17 +160,24 @@ def main(args):
 					epoch_acc.append(_acc)
 					if tf.train.global_step(sess, global_step)%10==0:
 						train_writer.add_summary(summary, g)
-						print_results(g, training_loss)
-						print_accuracy(g, train_acc)
+						print_results(g, training_loss, train_acc)
 						training_loss = []
 						train_acc = []
 				except tf.errors.OutOfRangeError:
-					print('Out of Data, Training Finished!')
+					print('='*30)
+					print('Epoch %s Finished !' % int(i)+1)
+					print_results_epoch(i, epoch_loss, epoch_acc)
+					print('='*30)
+					print()
 					break
-			print_results_epoch(i, epoch_loss)
-			print_accuracy_epoch(i, epoch_acc)
+			# print_results_epoch(i, epoch_loss, epoch_acc)
 			epoch_loss = []
 			epoch_acc = []
+			if int(nepochs - i) <= 2:
+				saver.save(sess, os.path.join(savepath,"model.ckpt"))
+				print("Model saved in %s" % (savepath))
+				print()
+
 	return
 
 if __name__ == '__main__':
