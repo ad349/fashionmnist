@@ -109,7 +109,7 @@ pyannote.metrics==1.0
 pyannote.parser==0.6.5
 pyasn1==0.2.3
 pyasn1-modules==0.0.9
-Pygments==2.2.0
+Pygments==2.7.4
 PyMySQL==0.8.0
 pyparsing==2.2.0
 pyperclip==1.6.0
