@@ -145,7 +145,7 @@ tornado==4.5.2
 traitlets==4.3.2
 unicodecsv==0.14.1
 Unidecode==0.4.21
-urllib3==1.21.1
+urllib3==1.26.5
 wcwidth==0.1.7
 webrtcvad==2.0.10
 Werkzeug==0.12.2
