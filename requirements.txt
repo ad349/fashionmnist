@@ -91,7 +91,7 @@ pathos==0.2.1
 pbr==3.1.1
 pexpect==4.2.1
 pickleshare==0.7.4
-Pillow==4.2.1
+Pillow==9.3.0
 ply==3.8
 pox==0.2.3
 ppft==1.6.4.7.1
